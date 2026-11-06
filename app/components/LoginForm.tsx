@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Layers, ArrowRight, ShieldCheck } from "lucide-react";
@@ -120,6 +121,9 @@ export default function LoginForm({
             and try again.
           </p>
         )}
+        <Link className="privacy-link" href="/privacy">
+          Privacy policy
+        </Link>
       </section>
     </main>
   );

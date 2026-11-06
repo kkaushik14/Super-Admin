@@ -1105,3 +1105,28 @@ form > .primary {
 .command-history {
   margin-bottom: var(--space-6);
 }
+
+.policy-page {
+  width: min(100% - var(--space-8), 800px);
+  margin: var(--space-12) auto;
+  padding-bottom: var(--space-12);
+}
+.policy-page header {
+  margin-bottom: var(--space-8);
+}
+.policy-page header > a {
+  font-weight: var(--font-weight-semibold);
+}
+.policy-page section {
+  margin: var(--space-8) 0;
+}
+.policy-page a,
+.privacy-link {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.privacy-link {
+  display: inline-block;
+  margin-top: var(--space-6);
+  color: var(--color-text-secondary);
+}

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.3 — 2026-11-06
+
+- Publish an application-specific privacy policy and link it from public sign-in for OAuth branding readiness.
+
 ## 1.2.2 — 2026-11-06
 
 - Make Google authorization verification reachable from Settings while project actions are disabled.
