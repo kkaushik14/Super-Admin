@@ -16,7 +16,7 @@ const cached =
   globalDatabase.superAdminMongo ??
   (globalDatabase.superAdminMongo = { promise: null, ready: null });
 export async function connectToDatabase(seed = true) {
-  if (mongoose.connection.readyState === 0 && cached.ready) {
+  if (mongoose.connection.readyState === 0) {
     cached.promise = null;
     cached.ready = null;
   }
@@ -27,6 +27,8 @@ export async function connectToDatabase(seed = true) {
         .connect(uri, {
           dbName,
           bufferCommands: false,
+          autoCreate: false,
+          autoIndex: false,
           maxPoolSize: 5,
           minPoolSize: 0,
           serverSelectionTimeoutMS: 5000,
@@ -42,14 +44,19 @@ export async function connectToDatabase(seed = true) {
   }
   if (!cached.ready)
     cached.ready = (async () => {
-      await Promise.all([
-        Project.init(),
-        Command.init(),
-        Audit.init(),
-        Admin.init(),
-        Session.init(),
-        RateLimit.init(),
-      ]);
+      // Initialize only after connection, in order. Mongoose's automatic model
+      // initialization caches rejected promises and can race fresh databases.
+      for (const model of [
+        Project,
+        Command,
+        Audit,
+        Admin,
+        Session,
+        RateLimit,
+      ]) {
+        await model.createCollection();
+        await model.createIndexes();
+      }
       if (!seed) return;
       try {
         await Project.updateOne(
@@ -71,7 +78,12 @@ export async function connectToDatabase(seed = true) {
       } catch (e) {
         if ((e as { code?: number }).code !== 11000) throw e;
       }
-    })().catch(() => {
+    })().catch((error: unknown) => {
+      const code = (error as { code?: unknown })?.code;
+      console.error(
+        "Administration database initialization failed",
+        typeof code === "number" ? code : "unavailable",
+      );
       cached.ready = null;
       throw Error("Administration database initialization failed");
     });

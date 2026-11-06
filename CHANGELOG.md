@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 — 2026-11-06
+
+- Initialize collections and indexes explicitly after connecting, avoiding cached automatic initialization failures on fresh databases.
+- Add a reconnect regression check and sanitize database initialization diagnostics.
+
 ## 1.2.0 — 2026-11-06
 
 - Add separately configured account suspend/restore and video hide/restore controls, disabled by default.

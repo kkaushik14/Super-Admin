@@ -170,6 +170,8 @@ try {
   } finally {
     rmSync(sourceDir, { recursive: true, force: true });
   }
+  await mongoose.disconnect();
+  check((await projects()).length, 2);
   console.log(
     `Passed ${count} MongoDB integration checks: transactions, atomic rate limiting, command concurrency, Google subject pinning and session revocation.`,
   );
