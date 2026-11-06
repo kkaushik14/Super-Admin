@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.4 — 2026-11-06
+
+- Host Google’s public ownership-verification file for Super Admin’s OAuth branding prerequisite.
+- Record OAuth publication and the remaining domain verification gate; production commands stay disabled.
+
 ## 1.2.3 — 2026-11-06
 
 - Publish an application-specific privacy policy and link it from public sign-in for OAuth branding readiness.
