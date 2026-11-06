@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { googleVerificationParameters } from "@/lib/actions/google-verification";
 import { signIn } from "next-auth/react";
 import { X } from "lucide-react";
 import type { Resource } from "@/lib/types";
@@ -262,13 +263,7 @@ export default function CommandDialog({
                     void signIn(
                       "google",
                       { callbackUrl: "/?command=" + command.id },
-                      {
-                        max_age: "0",
-                        claims: JSON.stringify({
-                          id_token: { auth_time: { essential: true } },
-                        }),
-                        prompt: "select_account",
-                      },
+                      googleVerificationParameters,
                     )
                   }
                 >

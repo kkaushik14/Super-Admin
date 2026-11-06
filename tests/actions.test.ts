@@ -4,6 +4,7 @@ import { createHash, createHmac } from "node:crypto";
 import {
   freshAuthentication,
   googleAuthenticationTime,
+  googleAuthenticationEvidence,
   validateIntent,
   actionConfiguration,
 } from "../lib/actions/policy.ts";
@@ -169,4 +170,31 @@ test("resource revision is optional for legacy reads and strict when supplied", 
   );
   for (const revision of [-1, "1", NaN, 2147483648])
     assert.throws(() => resourceList({ items: [{ ...item, revision }] }));
+});
+
+test("Google evidence distinguishes omitted claims from a real stale authentication without renewing time", () => {
+  const now = 1800000000000;
+  assert.deepEqual(googleAuthenticationEvidence({}, now), {
+    time: 0,
+    claim: "missing",
+  });
+  assert.deepEqual(
+    googleAuthenticationEvidence({ auth_time: "1800000000" }, now),
+    { time: 0, claim: "invalid" },
+  );
+  assert.deepEqual(
+    googleAuthenticationEvidence({ auth_time: now / 1000 - 10000 }, now),
+    { time: now / 1000 - 10000, claim: "present" },
+  );
+  assert.equal(
+    freshAuthentication(
+      googleAuthenticationTime({ auth_time: now / 1000 - 10000 }, now),
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    googleAuthenticationEvidence({ auth_time: now / 1000 + 31 }, now).claim,
+    "invalid",
+  );
 });

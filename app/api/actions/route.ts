@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     const id = new URL(request.url).searchParams.get("id");
     return NextResponse.json({
       fresh: freshAuthentication(owner.authenticatedAt),
+      authenticationClaim: owner.authenticationClaim,
       ...(id
         ? { command: commandSummary(await ownedCommand(id, owner)) }
         : { commands: await ownerCommands(owner) }),
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       command,
       fresh: freshAuthentication(owner.authenticatedAt),
+      authenticationClaim: owner.authenticationClaim,
     });
   } catch (e) {
     const error =

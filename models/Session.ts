@@ -7,6 +7,7 @@ export interface SessionRecord {
   expiresAt: Date;
   credentialVersion: string;
   authenticatedAt: number;
+  authenticationClaim: "present" | "missing" | "invalid" | "unknown";
 }
 const schema = new Schema<SessionRecord>(
   {
@@ -17,6 +18,11 @@ const schema = new Schema<SessionRecord>(
     expiresAt: { type: Date, required: true },
     credentialVersion: { type: String, default: "" },
     authenticatedAt: { type: Number, default: 0 },
+    authenticationClaim: {
+      type: String,
+      enum: ["present", "missing", "invalid", "unknown"],
+      default: "unknown",
+    },
   },
   { versionKey: false },
 );

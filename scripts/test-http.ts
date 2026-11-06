@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 import { MongoMemoryReplSet } from "mongodb-memory-server";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { googleVerificationParameters } from "../lib/actions/google-verification.ts";
 const require = createRequire(import.meta.url);
 const { encode } = require("next-auth/jwt");
 const mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } }),
@@ -204,6 +205,30 @@ try {
       })
     ).status,
     400,
+  );
+  const verificationStart = await request(
+    "/api/auth/signin/google?" +
+      new URLSearchParams(googleVerificationParameters),
+    "POST",
+    {
+      csrfToken: await csrf(),
+      callbackUrl: origin + "/?verification=1",
+      json: "true",
+    },
+    undefined,
+    true,
+  );
+  const verificationUrl = new URL((await verificationStart.json()).url);
+  check(verificationUrl.hostname, "accounts.google.com");
+  check(verificationUrl.searchParams.get("max_age"), "0");
+  check(
+    JSON.parse(verificationUrl.searchParams.get("claims")!).id_token.auth_time
+      .essential,
+    true,
+  );
+  check(
+    (await (await request("/api/actions")).json()).authenticationClaim,
+    "unknown",
   );
   const add = {
     action: "project.add",

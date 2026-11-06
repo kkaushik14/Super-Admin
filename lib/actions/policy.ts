@@ -20,9 +20,23 @@ export function freshAuthentication(value: unknown, now = Date.now()) {
   );
 }
 // Only call with the profile returned by NextAuth's verified Google OIDC callback.
-export function googleAuthenticationTime(profile: unknown, now = Date.now()) {
+export function googleAuthenticationEvidence(
+  profile: unknown,
+  now = Date.now(),
+) {
   const value = (profile as { auth_time?: unknown } | null)?.auth_time;
-  return freshAuthentication(value, now) ? (value as number) : 0;
+  if (value === undefined) return { time: 0, claim: "missing" as const };
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value <= 0 ||
+    value > Math.floor(now / 1000) + 30
+  )
+    return { time: 0, claim: "invalid" as const };
+  return { time: value, claim: "present" as const };
+}
+export function googleAuthenticationTime(profile: unknown, now = Date.now()) {
+  return googleAuthenticationEvidence(profile, now).time;
 }
 export function actionConfiguration(
   p: Project,

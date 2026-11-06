@@ -1,10 +1,12 @@
 "use client";
+import GoogleVerification from "../GoogleVerification";
 import Link from "next/link";
 import { ShieldCheck, Globe } from "lucide-react";
 import type { Snapshot } from "@/lib/types";
 export default function SettingsView({ data }: { data: Snapshot }) {
   return (
     <div className="settings-grid">
+      <GoogleVerification />
       <section className="panel settings-card">
         <ShieldCheck size={24} />
         <h2>Administrator access</h2>

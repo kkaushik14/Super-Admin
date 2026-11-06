@@ -60,7 +60,12 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
   const [commandSelection, setCommandSelection] =
     useState<CommandSelection | null>(null);
   useEffect(() => {
-    const id = new URLSearchParams(location.search).get("command");
+    const search = new URLSearchParams(location.search);
+    if (search.get("verification") === "1") {
+      setSection("Settings");
+      history.replaceState(null, "", location.pathname);
+    }
+    const id = search.get("command");
     if (id) {
       setCommandSelection({ id });
       history.replaceState(null, "", location.pathname);

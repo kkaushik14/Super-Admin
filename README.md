@@ -1,4 +1,4 @@
-# Super Admin · v1.2.1
+# Super Admin · v1.2.2
 
 A separate administration workspace for explicitly connected projects. ReeloGram uses its independently deployed adapter; read-only access and optional explicitly configured moderation controls use separate credentials. Its source, credentials, customer sessions and database are not used by this application.
 

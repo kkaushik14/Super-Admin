@@ -1,4 +1,4 @@
-import { googleAuthenticationTime } from "./actions/policy.ts";
+import { googleAuthenticationEvidence } from "./actions/policy.ts";
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -141,12 +141,12 @@ export function authOptions(): NextAuthOptions {
       },
       async jwt({ token, user, account, profile }) {
         if (user && account) {
+          const evidence = googleAuthenticationEvidence(profile);
           token.sid = await issueSession(
             user.id,
             account.provider,
-            account.provider === "google"
-              ? googleAuthenticationTime(profile)
-              : 0,
+            account.provider === "google" ? evidence.time : 0,
+            account.provider === "google" ? evidence.claim : "unknown",
           );
           await audit(
             user.email || "owner",

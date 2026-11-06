@@ -57,6 +57,8 @@ export async function issueSession(
   adminId: string,
   provider: string,
   authenticatedAt = 0,
+  authenticationClaim:
+    "present" | "missing" | "invalid" | "unknown" = "unknown",
 ) {
   await connectToDatabase();
   const admin = await Admin.findById(adminId);
@@ -70,6 +72,8 @@ export async function issueSession(
     sessionVersion: admin.sessionVersion,
     expiresAt: new Date(Date.now() + 8 * 3600_000),
     authenticatedAt: provider === "google" ? authenticatedAt : 0,
+    authenticationClaim:
+      provider === "google" ? authenticationClaim : "unknown",
     credentialVersion: provider === "dev-test" ? devCredentialVersion() : "",
   });
   return token;
@@ -107,6 +111,7 @@ export async function sessionIdentity(token: unknown) {
     provider: admin.provider,
     subject: admin.subject,
     authenticatedAt: session.authenticatedAt || 0,
+    authenticationClaim: session.authenticationClaim || "unknown",
   };
 }
 export async function revokeSession(token: unknown) {

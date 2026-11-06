@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.2 — 2026-11-06
+
+- Make Google authorization verification reachable from Settings while project actions are disabled.
+- Distinguish missing/invalid Google claims from stale authentication without renewing or weakening the five-minute authorization window.
+- Document Google Session age claim prerequisites and matching disabled production configuration.
+
 ## 1.2.1 — 2026-11-06
 
 - Initialize collections and indexes explicitly after connecting, avoiding cached automatic initialization failures on fresh databases.
