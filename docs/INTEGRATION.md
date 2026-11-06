@@ -1,6 +1,6 @@
 # Project administration API v1
 
-**Current integration is read-only.** The connector rejects all action paths and request bodies before dispatch. Resource API v1 now requires signing protocol v2; old signatures are not accepted.
+**Read access remains independent.** The read connector rejects all action paths and request bodies. Optional actions use a separate, disabled-by-default controller described in [ADMIN_ACTIONS.md](ADMIN_ACTIONS.md). Resource API v1 now requires signing protocol v2; old signatures are not accepted.
 
 This repository contains the control application only. No ReeloGram code or infrastructure has been changed. Projects must explicitly implement this contract before connection succeeds.
 
@@ -24,43 +24,10 @@ ReeloGram returns generic 404 for unauthorized/tampered/replayed/malformed reque
 
 For planned rotation, provision the new active pair on the receiver and optionally allow the previous pair until an explicit UTC deadline no more than 24 hours ahead. Switch this sender's key ID/secret, verify, then remove the previous pair. For compromise, revoke with no overlap. ReeloGram enforces expiry on every request; both keys share its rate limits and replay namespace. Configuration changes require deployment/restart on both servers. Remove reachable old deployments too. Disconnecting here alone does not revoke a copied key. No environment values are migrated automatically.
 
-## Resource contract and future action design
+## Resources
 
-GET /api/admin/v1/manifest returns:
+GET `/api/admin/v1/manifest` returns the matching project ID, version `1`, and explicitly enabled capabilities. The baseline is `accounts.read`, `videos.read`, `jobs.read`. Optional account/video actions appear only when the receiver enables them; local configuration must also authorize them.
 
-```json
-{
-  "projectId": "reelogram",
-  "version": "1",
-  "capabilities": [
-    "accounts.read",
-    "accounts.suspend",
-    "accounts.restore",
-    "accounts.revoke",
-    "videos.read",
-    "videos.hide",
-    "videos.restore",
-    "jobs.read",
-    "jobs.retry",
-    "blocklist.refresh"
-  ]
-}
-```
+GET `/api/admin/v1/accounts`, `/videos`, `/jobs` return `{ "items": [{ "id": "stable-id", "label": "Display name", "detail": "Safe summary", "status": "active" }] }`, at most 100 items. Account/video DTOs add a nonnegative integer `revision`; legacy read responses without it remain readable but cannot be action targets. Suspended accounts and hidden videos use `suspended` / `hidden` status. Never expose credentials, password/reset hashes, confirmation links, parent email or DOB.
 
-The example above describes the broader planned contract. **ReeloGram currently advertises only `accounts.read`, `videos.read`, and `jobs.read`; all other capabilities remain disabled.** Advertise only supported capabilities. GET /api/admin/v1/accounts, /videos and /jobs return `{ "items": [{ "id": "stable-id", "label": "Display name", "detail": "Safe summary", "status": "active" }] }`, at most 100 items. V1 displays a bounded operational list; pagination and filters will require extending this contract. Never expose secrets, password/reset hashes, confirmation links, parent email addresses or DOB. Jobs should expose only eligible operational notifications; no reset-link replay.
-
-**Future only:** action dispatch is disabled in the current connector. Enabling writes requires separate permissions and fresh owner authorization, not a silent expansion of the read credential. The planned POST /api/admin/v1/actions receives `{action,target,reason,actor,commandId}`. Persist commandId plus a payload digest atomically before applying the operation. Repeated IDs with the same payload must return their original outcome, conflicting payloads must fail. Return HTTP 200 with `{commandId,status}` where status is `succeeded`, `accepted`, or `rejected`. Accepted indicates queued, not completed. Preserve job/provider deduplication and the project's business rules.
-
-If the response is lost or malformed, Super Admin records `unknown`; it does not retry automatically. Pending/accepted/unknown commands require reconciliation with project records before another submission. Automated command-status reconciliation is a future extension. Never interpret a timeout as proof that the action did not happen.
-
-## ReeloGram adapter checklist for a later, coordinated change
-
-- Session revocation reuses sessionVersion. Suspension needs a durable status checked on sign-in, existing sessions, uploads and mutations.
-- Moderation needs a distinct visibility field (do not overload hero/feed placement), with consistent filtering across feed, Reels, showcase, watch pages and sitemaps, plus Redis invalidation.
-- All mutations reuse cache guards, ownership checks and existing media locks.
-- Retry only eligible notification jobs. Preserve provider choice, ambiguous-delivery safeguards and retry bounds.
-- Blocklist refresh preserves the last valid snapshot and coordination lease.
-- Parent confirmation and inbox verification remain governed by their existing flows.
-- Never delete arbitrary ImageKit files. Permanent deletion is deliberately outside this first version's capability contract.
-
-Test authentication, replay rejection, cross-project credentials, capability denial, idempotency, cache invalidation and provider ambiguity before enabling production controls.
+See [the action controller and receiver handoff](ADMIN_ACTIONS.md) for the precise dispatch, receipt, authentication and activation protocol. Job retries, account-session-only revocation, blocklist changes and permanent deletion are not supported by this controller.

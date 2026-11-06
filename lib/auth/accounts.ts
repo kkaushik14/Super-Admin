@@ -53,7 +53,11 @@ export async function devAdmin() {
   );
   return admin.active ? admin : null;
 }
-export async function issueSession(adminId: string, provider: string) {
+export async function issueSession(
+  adminId: string,
+  provider: string,
+  authenticatedAt = 0,
+) {
   await connectToDatabase();
   const admin = await Admin.findById(adminId);
   if (!admin?.active || admin.provider !== provider)
@@ -65,6 +69,7 @@ export async function issueSession(adminId: string, provider: string) {
     provider,
     sessionVersion: admin.sessionVersion,
     expiresAt: new Date(Date.now() + 8 * 3600_000),
+    authenticatedAt: provider === "google" ? authenticatedAt : 0,
     credentialVersion: provider === "dev-test" ? devCredentialVersion() : "",
   });
   return token;
@@ -100,6 +105,8 @@ export async function sessionIdentity(token: unknown) {
     id: String(admin._id),
     email: admin.email,
     provider: admin.provider,
+    subject: admin.subject,
+    authenticatedAt: session.authenticatedAt || 0,
   };
 }
 export async function revokeSession(token: unknown) {

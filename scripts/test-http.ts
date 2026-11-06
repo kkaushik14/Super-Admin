@@ -111,6 +111,11 @@ try {
   await start(false);
   check((await request("/")).status, 307);
   check((await request("/api/control")).status, 401);
+  check((await request("/api/actions")).status, 401);
+  check(
+    (await request("/api/actions", "POST", { mode: "prepare" })).status,
+    401,
+  );
   const providers = await (await request("/api/auth/providers")).json();
   check(Object.keys(providers), ["google"]);
   const html = await (await request("/login")).text();
@@ -165,6 +170,41 @@ try {
     ).status,
     400,
   );
+  check((await (await request("/api/actions")).json()).fresh, false);
+  check(
+    (
+      await request("/api/actions", "POST", {
+        mode: "prepare",
+        projectId: "reelogram",
+        actor: "forged",
+      })
+    ).status,
+    400,
+  );
+  check(
+    (
+      await request(
+        "/api/actions",
+        "POST",
+        { mode: "prepare", projectId: "reelogram" },
+        "https://evil.com",
+      )
+    ).status,
+    400,
+  );
+  check(
+    (
+      await request("/api/actions", "POST", {
+        mode: "prepare",
+        projectId: "reelogram",
+        action: "accounts.suspend",
+        target: "0123456789abcdef01234567",
+        reason: "Test moderation",
+        expectedRevision: 0,
+      })
+    ).status,
+    400,
+  );
   const add = {
     action: "project.add",
     projectId: "second-app",
@@ -194,6 +234,7 @@ try {
   const { default: Admin } = await import("../models/Admin.ts");
   await Admin.updateOne({ _id: admin._id }, { $set: { active: false } });
   check((await request("/api/control")).status, 401);
+  check((await request("/api/actions")).status, 401);
   await stop();
   await start(true);
   const devProviders = await (await request("/api/auth/providers")).json();
@@ -229,6 +270,10 @@ try {
   assert(!loginBody.url.includes("error"), JSON.stringify(loginBody));
   count++;
   check((await request("/api/control")).status, 200);
+  check(
+    (await request("/api/actions", "POST", { mode: "prepare" })).status,
+    401,
+  );
   const user = await (await request("/api/auth/session")).json();
   check(user.user.email, "test@example.com");
   assert(jar.get("superadmin.session-token"));

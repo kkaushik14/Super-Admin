@@ -19,10 +19,12 @@ export type Resource = {
   label: string;
   detail: string;
   status: string;
+  revision?: number;
 };
 export type Snapshot = {
   projects: Project[];
   audit: Audit[];
   preview: boolean;
   actor: string;
+  availableActions?: Record<string, string[]>;
 };

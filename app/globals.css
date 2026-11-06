@@ -1068,3 +1068,40 @@ form > .primary {
     flex-wrap: wrap;
   }
 }
+
+.command-dialog {
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+.command-details {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3) var(--space-5);
+  margin: var(--space-6) 0;
+}
+.command-details dt {
+  color: var(--color-text-secondary);
+}
+.command-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.command-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: var(--space-6) 0;
+}
+.command-confirm input {
+  width: auto;
+  margin: 3px 0 0;
+}
+.command-buttons {
+  flex-wrap: wrap;
+}
+.command-error {
+  color: var(--color-danger);
+}
+.command-history {
+  margin-bottom: var(--space-6);
+}

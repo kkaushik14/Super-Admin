@@ -192,10 +192,14 @@ export function resourceList(value: unknown): Resource[] {
     x.items.some(
       (r) =>
         !r ||
+        (r.revision !== undefined &&
+          (!Number.isInteger(r.revision) ||
+            r.revision < 0 ||
+            r.revision > 2147483647)) ||
         ["id", "label", "detail", "status"].some(
           (k) =>
             typeof r[k as keyof Resource] !== "string" ||
-            r[k as keyof Resource].length > 2000,
+            r[k as "id" | "label" | "detail" | "status"].length > 2000,
         ),
     )
   )

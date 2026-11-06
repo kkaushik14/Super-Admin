@@ -1,3 +1,4 @@
+import { availableActions } from "@/lib/actions/policy";
 import { redirect } from "next/navigation";
 import { actor } from "@/lib/auth";
 import { projects, history } from "@/lib/store";
@@ -9,7 +10,15 @@ export default async function Page() {
   const [registered, audit] = await Promise.all([projects(), history()]);
   return (
     <Dashboard
-      initial={{ projects: registered, audit, preview: false, actor: who }}
+      initial={{
+        projects: registered,
+        audit,
+        preview: false,
+        actor: who,
+        availableActions: Object.fromEntries(
+          registered.map((p) => [p.id, availableActions(p)]),
+        ),
+      }}
     />
   );
 }

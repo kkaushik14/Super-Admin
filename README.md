@@ -1,6 +1,6 @@
-# Super Admin · v1.0.0
+# Super Admin · v1.2.0
 
-A separate administration workspace for explicitly connected projects. ReeloGram is registered but remains disconnected until its adapter is implemented. Its source, credentials, customer sessions and database are not used by this application.
+A separate administration workspace for explicitly connected projects. ReeloGram uses its independently deployed adapter; read-only access and optional explicitly configured moderation controls use separate credentials. Its source, credentials, customer sessions and database are not used by this application.
 
 ## Local setup
 
@@ -48,9 +48,9 @@ ReeloGram-compatible organization: `app/components`, `app/api`, `lib`, `models`,
 
 ## Project connections and action safety
 
-See [the integration contract](docs/INTEGRATION.md). Project secrets and approved hosts are independent of Google authentication. Commands are recorded before dispatch, unresolved duplicates are rejected atomically, and timeouts remain `unknown` instead of being silently retried. Project enrollment/disconnection and their audit records commit together. Connection checks do not establish general cloud-provider health monitoring.
+See [the integration contract](docs/INTEGRATION.md) and [action setup / Development handoff](docs/ADMIN_ACTIONS.md). Project secrets and approved hosts are independent of Google authentication. Commands are recorded before dispatch, unresolved duplicates are rejected atomically, and timeouts remain `unknown` instead of being silently retried. Project enrollment/disconnection and their audit records commit together. Connection checks do not establish general cloud-provider health monitoring.
 
-The interface supports one owner permission level. Accepted/unknown remote commands still require reconciliation with the project before another submission. Audit data is not tamper-proof against database administrators. Define a retention/backup policy for production; automatic expiry is limited to sessions and rate counters.
+The interface supports one owner permission level. Unknown remote commands retain their ID and immutable intent; the controller reconciles receipts before bounded, explicitly confirmed retries. Audit data is not tamper-proof against database administrators. Define a retention/backup policy for production; automatic expiry is limited to sessions and rate counters.
 
 ## Existing SQLite data
 
@@ -63,6 +63,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run test:integration
+npm run test:actions
 npm run build
 npm run test:http
 ```

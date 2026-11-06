@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Command from "../models/Command.ts";
 import { databaseConfiguration } from "./config/environment.ts";
 import Project from "../models/Project.ts";
 import Audit from "../models/Audit.ts";
@@ -43,6 +44,7 @@ export async function connectToDatabase(seed = true) {
     cached.ready = (async () => {
       await Promise.all([
         Project.init(),
+        Command.init(),
         Audit.init(),
         Admin.init(),
         Session.init(),

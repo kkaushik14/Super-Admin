@@ -1,9 +1,9 @@
+import { availableActions } from "@/lib/actions/policy";
 import { readBody } from "@/lib/request";
 import { NextResponse } from "next/server";
 import { actor, sameOrigin } from "@/lib/auth";
 import {
   audit,
-  claimAction,
   enrollProject,
   disconnectProject,
   finish,
@@ -20,7 +20,7 @@ import {
   validateOrigin,
   validateProjectConnection,
 } from "@/lib/connector";
-import { capabilities, type Capability, type Project } from "@/lib/types";
+import { type Capability, type Project } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 async function identity() {
@@ -50,6 +50,9 @@ export async function GET(request: Request) {
     }
     return NextResponse.json({
       projects: await projects(),
+      availableActions: Object.fromEntries(
+        (await projects()).map((p) => [p.id, availableActions(p)]),
+      ),
       audit: await history(),
       preview: !who,
       actor: who || "Local preview",
@@ -121,8 +124,6 @@ export async function POST(request: Request) {
           await callProject(p, "/api/admin/v1/manifest"),
           p.id,
         );
-        if (p.environment === "local")
-          m.capabilities = m.capabilities.filter((c) => c.endsWith(".read"));
         await saveProject({
           ...p,
           ...m,
@@ -146,45 +147,9 @@ export async function POST(request: Request) {
       await disconnectProject(p, who);
       return NextResponse.json({ ok: true });
     }
-    if (
-      p.environment === "local" ||
-      !capabilities.includes(b.action) ||
-      b.action.endsWith(".read") ||
-      p.status !== "connected" ||
-      !p.capabilities.includes(b.action)
-    )
-      throw Error("Action is not available for this project");
-    if (
-      typeof b.target !== "string" ||
-      !b.target ||
-      b.target.length > 120 ||
-      typeof b.reason !== "string" ||
-      b.reason.trim().length < 10 ||
-      b.reason.length > 500
-    )
-      throw Error(
-        "Select a target and provide a reason of at least 10 characters",
-      );
-    command = await claimAction(who, p.id, b.action, b.target, b.reason.trim());
-    const result = (await callProject(
-      p,
-      "/api/admin/v1/actions",
-      {
-        action: b.action,
-        target: b.target,
-        reason: b.reason.trim(),
-        actor: who,
-        commandId: command,
-      },
-      command,
-    )) as { commandId?: string; status?: string };
-    if (
-      result?.commandId !== command ||
-      !["succeeded", "accepted", "rejected"].includes(result.status || "")
-    )
-      throw Error("Unconfirmed project result");
-    await finish(command, result.status!);
-    return NextResponse.json({ ok: true, status: result.status });
+    throw Error(
+      "Use the confirmed command workflow for administrative actions",
+    );
   } catch (e) {
     if (command) await finish(command, "unknown");
     return NextResponse.json(

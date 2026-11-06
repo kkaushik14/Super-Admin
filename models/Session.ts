@@ -6,6 +6,7 @@ export interface SessionRecord {
   sessionVersion: number;
   expiresAt: Date;
   credentialVersion: string;
+  authenticatedAt: number;
 }
 const schema = new Schema<SessionRecord>(
   {
@@ -15,6 +16,7 @@ const schema = new Schema<SessionRecord>(
     sessionVersion: { type: Number, required: true },
     expiresAt: { type: Date, required: true },
     credentialVersion: { type: String, default: "" },
+    authenticatedAt: { type: Number, default: 0 },
   },
   { versionKey: false },
 );

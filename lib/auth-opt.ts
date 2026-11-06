@@ -1,3 +1,4 @@
+import { googleAuthenticationTime } from "./actions/policy.ts";
 import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -37,6 +38,9 @@ export function authOptions(): NextAuthOptions {
             scope: "openid email profile",
             prompt: "select_account",
             access_type: "online",
+            claims: JSON.stringify({
+              id_token: { auth_time: { essential: true } },
+            }),
           },
         },
       }),
@@ -135,9 +139,15 @@ export function authOptions(): NextAuthOptions {
         }
         return account?.provider === "dev-test" && devLoginEnabled();
       },
-      async jwt({ token, user, account }) {
+      async jwt({ token, user, account, profile }) {
         if (user && account) {
-          token.sid = await issueSession(user.id, account.provider);
+          token.sid = await issueSession(
+            user.id,
+            account.provider,
+            account.provider === "google"
+              ? googleAuthenticationTime(profile)
+              : 0,
+          );
           await audit(
             user.email || "owner",
             "system",

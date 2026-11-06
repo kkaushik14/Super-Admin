@@ -27,6 +27,9 @@ import { Empty, statusLabel } from "./shared";
 import OverviewView from "./views/OverviewView";
 import ProjectsView from "./views/ProjectsView";
 import AuditView from "./views/AuditView";
+import CommandDialog, { type CommandSelection } from "./CommandDialog";
+import CommandsView from "./views/CommandsView";
+import { actionApplies, type AdminAction } from "@/lib/actions/contract";
 import SettingsView from "./views/SettingsView";
 const sections = [
   ["Overview", LayoutDashboard],
@@ -54,6 +57,15 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
     [action, setAction] = useState<{ action: string; target: string } | null>(
       null,
     );
+  const [commandSelection, setCommandSelection] =
+    useState<CommandSelection | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get("command");
+    if (id) {
+      setCommandSelection({ id });
+      history.replaceState(null, "", location.pathname);
+    }
+  }, []);
   useEffect(() => {
     if (!add && !action) return;
     const previous = document.activeElement as HTMLElement;
@@ -379,13 +391,19 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
               setAction={setAction}
             />
           ) : section === "Audit history" ? (
-            <AuditView
-              data={data}
-              query={query}
-              setQuery={setQuery}
-              matches={matches}
-              refresh={refresh}
-            />
+            <>
+              <CommandsView
+                open={(id) => setCommandSelection({ id })}
+                revision={data.audit}
+              />
+              <AuditView
+                data={data}
+                query={query}
+                setQuery={setQuery}
+                matches={matches}
+                refresh={refresh}
+              />
+            </>
           ) : section === "Settings" ? (
             <SettingsView data={data} />
           ) : (
@@ -440,11 +458,7 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
                         </div>
                         <button
                           className="secondary"
-                          disabled={
-                            data.preview ||
-                            current?.status !== "connected" ||
-                            !current.capabilities.includes(c as Capability)
-                          }
+                          disabled={true}
                           onClick={() =>
                             c === "jobs.retry"
                               ? navigate("Email operations")
@@ -501,20 +515,17 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
                             </td>
                             <td>
                               <div className="row-actions">
-                                {(section === "Accounts"
-                                  ? [
-                                      "accounts.suspend",
-                                      "accounts.restore",
-                                      "accounts.revoke",
-                                    ]
-                                  : section === "Videos"
-                                    ? ["videos.hide", "videos.restore"]
-                                    : ["jobs.retry"]
-                                )
-                                  .filter((a) =>
-                                    current.capabilities.includes(
-                                      a as Capability,
-                                    ),
+                                {(data.availableActions?.[current.id] || [])
+                                  .filter(
+                                    (a) =>
+                                      a.startsWith(
+                                        section === "Accounts"
+                                          ? "accounts."
+                                          : section === "Videos"
+                                            ? "videos."
+                                            : "jobs.",
+                                      ) &&
+                                      actionApplies(a as AdminAction, item),
                                   )
                                   .map((a) => (
                                     <button
@@ -522,9 +533,10 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
                                       className="secondary"
                                       disabled={data.preview || busy}
                                       onClick={() =>
-                                        setAction({
-                                          action: a,
-                                          target: item.id,
+                                        setCommandSelection({
+                                          projectId: current.id,
+                                          action: a as AdminAction,
+                                          item,
                                         })
                                       }
                                     >
@@ -646,6 +658,13 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
             </form>
           </div>
         </div>
+      )}
+      {commandSelection && (
+        <CommandDialog
+          selection={commandSelection}
+          close={() => setCommandSelection(null)}
+          changed={refresh}
+        />
       )}
       {action && (
         <div className="modal-backdrop">

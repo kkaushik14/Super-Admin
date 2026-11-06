@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-11-06
+
+- Add separately configured account suspend/restore and video hide/restore controls, disabled by default.
+- Require verified Google authentication time, exact target/revision review, reason and explicit confirmation; development passwords never authorize commands.
+- Persist immutable intents and durable audits before dispatch; reconcile uncertain receipts, bound retries and reject conflicting/duplicate commands.
+- Preserve independent read credentials, SSRF protections, remote capability checks and MongoDB transaction guarantees.
+- Add isolated command/signature/fault tests and extend protected HTTP checks. No production customer moderation is performed by the release.
+
+## 1.1.0 — 2026-11-06
 
 - Add a development-only, exact-loopback, read-only project connection with separate local credentials and environment.
 - Add reproducible local ReeloGram connection checks and credential handoff documentation.
