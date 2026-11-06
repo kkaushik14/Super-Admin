@@ -5,7 +5,7 @@ import { isIP } from "node:net";
 import { capabilities, type Project, type Resource } from "./types.ts";
 export function validateOrigin(raw: string) {
   const u = new URL(raw);
-  const allowed = (process.env.ADMIN_ALLOWED_PROJECT_HOSTS || "")
+  const allowed = (process.env.SUPERADMIN_ALLOWED_PROJECT_HOSTS || "")
     .split(",")
     .map((s) => s.trim());
   if (
@@ -57,7 +57,9 @@ export async function callProject(
     throw Error("Project host must resolve to a public address");
   const secret =
     process.env[
-      "ADMIN_PROJECT_" + p.id.toUpperCase().replaceAll("-", "_") + "_SECRET"
+      "SUPERADMIN_PROJECT_" +
+        p.id.toUpperCase().replaceAll("-", "_") +
+        "_SECRET"
     ];
   if (!secret || secret.length < 32)
     throw Error("Project credential is not configured");

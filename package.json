@@ -1,6 +1,6 @@
 {
   "name": "super-admin",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "license": "UNLICENSED",
   "engines": {
@@ -12,16 +12,21 @@
     "start": "next start --hostname 127.0.0.1 --port 3100",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "admin:create": "node --experimental-strip-types scripts/create-admin.ts",
     "format": "prettier --write app lib models scripts tests docs *.json *.ts *.mjs README.md",
     "test:http": "node --experimental-strip-types scripts/test-http.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "dev:credentials": "node --experimental-strip-types scripts/dev-credentials.ts",
+    "test:integration": "node --experimental-strip-types scripts/test-integration.ts",
+    "db:migrate-sqlite": "node --experimental-strip-types scripts/migrate-sqlite.ts"
   },
   "dependencies": {
     "next": "15.5.29",
     "react": "19.0.9",
     "react-dom": "19.0.9",
-    "lucide-react": "0.474.0"
+    "lucide-react": "0.474.0",
+    "mongoose": "^8.24.8",
+    "next-auth": "^4.24.15",
+    "bcryptjs": "^3.0.3"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
@@ -31,7 +36,8 @@
     "prettier": "^3.6.2",
     "eslint": "^9.39.0",
     "eslint-config-next": "15.5.29",
-    "@eslint/eslintrc": "^3.3.1"
+    "@eslint/eslintrc": "^3.3.1",
+    "mongodb-memory-server": "^10.4.3"
   },
   "type": "module",
   "overrides": {

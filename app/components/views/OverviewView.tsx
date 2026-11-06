@@ -36,7 +36,6 @@ export default function OverviewView({
           icon={<Layers size={18} />}
           label="Total projects"
           value={data.projects.length}
-          note="Your connected ecosystem"
         />
         <Stat
           icon={<Activity size={18} />}
@@ -63,7 +62,6 @@ export default function OverviewView({
           icon={<History size={18} />}
           label="Recent actions"
           value={data.audit.length}
-          note="Latest 200 audit records"
         />
       </div>
       <div className="overview-grid">
@@ -71,7 +69,6 @@ export default function OverviewView({
           <div className="panel-heading">
             <div>
               <h2>Your projects</h2>
-              <p>One workspace. Independent connections.</p>
             </div>
             <button
               className="text-button"
@@ -137,7 +134,6 @@ export default function OverviewView({
           </span>
         </div>
         <div>
-          <span className="eyebrow">BUILT TO GROW WITH YOU</span>
           <h2>Your first connection starts here.</h2>
           <p>
             Connect ReeloGram when its admin integration is ready.
@@ -148,15 +144,11 @@ export default function OverviewView({
             Review connection setup <ArrowRight size={16} />
           </button>
         </div>
-        <span className="step-indicator">
-          01 <span>/ 03</span>
-        </span>
       </section>
       <section className="panel activity-panel">
         <div className="panel-heading">
           <div>
             <h2>Recent activity</h2>
-            <p>Every administrative action leaves a clear record.</p>
           </div>
           <button
             className="text-button"

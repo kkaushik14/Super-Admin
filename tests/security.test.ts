@@ -1,57 +1,114 @@
-import { test, after } from "node:test";
+import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-process.env.ADMIN_DATA_DIR = mkdtempSync(join(tmpdir(), "super-admin-test-"));
-process.env.ADMIN_ALLOWED_PROJECT_HOSTS = "www.reelogram.in";
-const { db, projects, rateLimit, audit, history, project } =
-  await import("../lib/store.ts");
-const {
-  hashPassword,
-  verifyPassword,
-  otp,
-  consumeOtp,
-  createSession,
-  actor,
-  digest,
-  sameOrigin,
-} = await import("../lib/auth.ts");
-const { validateOrigin, privateAddress, signature, manifest, resourceList } =
-  await import("../lib/connector.ts");
-const { readBody } = await import("../lib/request.ts");
-after(() => {
-  db().close();
-  rmSync(process.env.ADMIN_DATA_DIR!, { recursive: true, force: true });
+import {
+  devLoginEnabled,
+  databaseConfiguration,
+  appOrigin,
+} from "../lib/config/environment.ts";
+import { googleIdentity, safeRedirect } from "../lib/auth/policy.ts";
+import {
+  validateOrigin,
+  privateAddress,
+  signature,
+  manifest,
+  resourceList,
+} from "../lib/connector.ts";
+import { readBody } from "../lib/request.ts";
+const dev = {
+  NODE_ENV: "development",
+  SUPERADMIN_APP_URL: "http://localhost:3100",
+  SUPERADMIN_DEV_LOGIN_ENABLED: "1",
+  SUPERADMIN_DEV_EMAIL: "test@example.com",
+  SUPERADMIN_DEV_PASSWORD_HASH:
+    "bcrypt:" + Buffer.from("$2b$12$" + "x".repeat(53)).toString("base64"),
+};
+test("development credentials require all local-only gates", () => {
+  assert(devLoginEnabled(dev));
+  for (const overrides of [
+    { NODE_ENV: "production" },
+    { NODE_ENV: "test" },
+    { VERCEL: "1" },
+    { VERCEL_ENV: "preview" },
+    { SUPERADMIN_DEV_LOGIN_ENABLED: "0" },
+    { SUPERADMIN_APP_URL: "https://admin.example.com" },
+    { SUPERADMIN_DEV_PASSWORD_HASH: "" },
+  ])
+    assert(!devLoginEnabled({ ...dev, ...overrides }));
 });
-test("password hashing and authentication reject incorrect passwords", () => {
-  const hash = hashPassword("very long unique test password");
-  assert(verifyPassword("very long unique test password", hash));
-  assert(!verifyPassword("wrong", hash));
+test("Google owner must be verified and match exact allowlist and immutable subject", () => {
+  const env = { SUPERADMIN_GOOGLE_OWNER_EMAIL: "owner@gmail.com" };
+  const p = { sub: "12345", email: "owner@gmail.com", email_verified: true };
+  assert(googleIdentity(p, env));
+  for (const override of [
+    { email_verified: false },
+    { email_verified: "true" },
+    { email: "other@gmail.com" },
+    { email: "owner@gmail.com.evil.com" },
+    { sub: "" },
+    { sub: 123 },
+  ])
+    assert.equal(googleIdentity({ ...p, ...override }, env), null);
+  assert.equal(
+    googleIdentity(p, { ...env, SUPERADMIN_GOOGLE_OWNER_SUBJECT: "different" }),
+    null,
+  );
+  assert.equal(googleIdentity(p, {}), null);
+  assert.equal(
+    googleIdentity(
+      { ...p, email: "owner@example.com" },
+      { SUPERADMIN_GOOGLE_OWNER_EMAIL: "owner@example.com" },
+    ),
+    null,
+  );
+  assert(
+    googleIdentity(
+      { ...p, email: "owner@example.com", hd: "example.com" },
+      { SUPERADMIN_GOOGLE_OWNER_EMAIL: "owner@example.com" },
+    ),
+  );
 });
-test("TOTP matches RFC test vector and cannot replay a consumed code", () => {
-  const secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
-  assert.equal(otp(secret, 1), "287082");
-  db()
-    .prepare("INSERT INTO admins(email,password,totp) VALUES(?,?,?)")
-    .run("owner@example.com", "unused", secret);
-  assert(consumeOtp("owner@example.com", secret, otp(secret)));
-  assert(!consumeOtp("owner@example.com", secret, otp(secret)));
-  assert(!consumeOtp("owner@example.com", secret, "123"));
+test("database configuration cannot silently reuse ReeloGram", () => {
+  assert.throws(() =>
+    databaseConfiguration({
+      REELOGRAM_MONGODB_URL: "mongodb://localhost/reelogram",
+    }),
+  );
+  assert.throws(() =>
+    databaseConfiguration({
+      SUPERADMIN_MONGODB_URL: "mongodb://localhost",
+      SUPERADMIN_MONGODB_DB: "reelogram",
+    }),
+  );
+  assert.deepEqual(
+    databaseConfiguration({
+      SUPERADMIN_MONGODB_URL: "mongodb://localhost",
+      SUPERADMIN_MONGODB_DB: "superadmin_test",
+    }),
+    { uri: "mongodb://localhost", dbName: "superadmin_test" },
+  );
 });
-test("sessions are opaque, hashed, expire and revoke", () => {
-  const token = createSession("owner@example.com");
-  assert.equal(actor(token), "owner@example.com");
-  assert.equal(actor("forged"), null);
-  db()
-    .prepare("UPDATE sessions SET expires=0 WHERE digest=?")
-    .run(digest(token));
-  assert.equal(actor(token), null);
-  const other = createSession("owner@example.com");
-  db().prepare("DELETE FROM sessions WHERE digest=?").run(digest(other));
-  assert.equal(actor(other), null);
+test("origins and redirects cannot be chosen by an untrusted host", () => {
+  assert.throws(() => appOrigin({ SUPERADMIN_APP_URL: "http://evil.com" }));
+  assert.throws(() => appOrigin({ SUPERADMIN_APP_URL: "https://a.com/path" }));
+  assert.equal(
+    safeRedirect("https://evil.com", "https://admin.example.com"),
+    "https://admin.example.com",
+  );
+  assert.equal(
+    safeRedirect("//evil.com", "https://admin.example.com"),
+    "https://admin.example.com",
+  );
+  assert.equal(
+    safeRedirect("/api/auth/signin", "https://admin.example.com"),
+    "https://admin.example.com",
+  );
+  assert.equal(
+    safeRedirect("/", "https://admin.example.com"),
+    "https://admin.example.com/",
+  );
 });
-test("project enrollment is allowlisted and rejects internal or malformed endpoints", () => {
+test("project enrollment rejects internal and unapproved destinations", () => {
+  process.env.SUPERADMIN_ALLOWED_PROJECT_HOSTS = "www.reelogram.in";
   assert.equal(
     validateOrigin("https://www.reelogram.in"),
     "https://www.reelogram.in",
@@ -76,7 +133,7 @@ test("project enrollment is allowlisted and rejects internal or malformed endpoi
     assert(privateAddress(ip));
   assert(!privateAddress("8.8.8.8"));
 });
-test("signatures bind method, path, timestamp, nonce and payload", () => {
+test("connection signatures bind all request fields", () => {
   const args = [
     "secret",
     "POST",
@@ -97,7 +154,7 @@ test("signatures bind method, path, timestamp, nonce and payload", () => {
     );
   }
 });
-test("manifest rejects different project identity and unknown capabilities", () => {
+test("manifest and resource validation reject privilege expansion", () => {
   assert.deepEqual(
     manifest(
       { projectId: "reelogram", version: "1", capabilities: ["accounts.read"] },
@@ -119,16 +176,7 @@ test("manifest rejects different project identity and unknown capabilities", () 
   );
   assert.throws(() => resourceList({ items: [{ id: "x" }] }));
 });
-test("origin checks, bounded requests and durable throttling", async () => {
-  assert.throws(() =>
-    sameOrigin(
-      new Request("http://localhost:3100", {
-        headers: { origin: "https://evil.com" },
-      }),
-    ),
-  );
-  for (let i = 0; i < 8; i++) rateLimit("test");
-  assert.throws(() => rateLimit("test"));
+test("request streaming enforces a bound", async () => {
   await assert.rejects(() =>
     readBody(
       new Request("http://localhost", {
@@ -142,52 +190,5 @@ test("origin checks, bounded requests and durable throttling", async () => {
       new Request("http://localhost", { method: "POST", body: "{}" }),
     ),
     "{}",
-  );
-});
-test("initial project is disconnected and unknown IDs cannot access another project", () => {
-  assert.equal(projects()[0].status, "not-connected");
-  assert.deepEqual(projects()[0].capabilities, []);
-  assert.throws(() => project("missing"));
-  audit("owner", "reelogram", "test", "record", "test reason", "succeeded");
-  assert.equal(history()[0].projectId, "reelogram");
-});
-
-test("unresolved commands cannot be duplicated and terminal outcomes release the target", async () => {
-  const { claimAction, finish } = await import("../lib/store.ts");
-  const id = claimAction(
-    "owner",
-    "reelogram",
-    "jobs.retry",
-    "job-1",
-    "retry eligible notification",
-  );
-  assert.throws(() =>
-    claimAction(
-      "owner",
-      "reelogram",
-      "jobs.retry",
-      "job-1",
-      "retry eligible notification",
-    ),
-  );
-  finish(id, "unknown");
-  assert.throws(() =>
-    claimAction(
-      "owner",
-      "reelogram",
-      "jobs.retry",
-      "job-1",
-      "retry eligible notification",
-    ),
-  );
-  finish(id, "succeeded");
-  assert(
-    claimAction(
-      "owner",
-      "reelogram",
-      "jobs.retry",
-      "job-1",
-      "retry eligible notification",
-    ),
   );
 });

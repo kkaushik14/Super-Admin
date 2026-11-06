@@ -1,11 +1,11 @@
 import { readBody } from "@/lib/request";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { actor, preview, sameOrigin } from "@/lib/auth";
+import { actor, sameOrigin } from "@/lib/auth";
 import {
   audit,
   claimAction,
-  db,
+  enrollProject,
+  disconnectProject,
   finish,
   history,
   project,
@@ -23,11 +23,11 @@ import { capabilities, type Capability, type Project } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 async function identity() {
-  return actor((await cookies()).get("admin_session")?.value);
+  return actor();
 }
 export async function GET(request: Request) {
   const who = await identity();
-  if (!who && !preview())
+  if (!who)
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   try {
     const u = new URL(request.url),
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       if (!who) throw Error("Connect and sign in to inspect project data");
       if (!["accounts", "videos", "jobs"].includes(resource))
         throw Error("Unknown resource");
-      const p = project(id);
+      const p = await project(id);
       if (
         p.status !== "connected" ||
         !p.capabilities.includes((resource + ".read") as Capability)
@@ -48,8 +48,8 @@ export async function GET(request: Request) {
       });
     }
     return NextResponse.json({
-      projects: projects(),
-      audit: history(),
+      projects: await projects(),
+      audit: await history(),
       preview: !who,
       actor: who || "Local preview",
     });
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
   let command: string | undefined;
   try {
     sameOrigin(request);
-    rateLimit("control:" + who, 100);
+    await rateLimit("control:" + who, 100);
     const raw = await readBody(request);
     if (raw.length > 8192) throw Error("Request too large");
     const b = JSON.parse(raw);
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
         !["production", "staging"].includes(b.environment)
       )
         throw Error("Check project details");
-      if (projects().some((p) => p.id === b.projectId))
+      if ((await projects()).some((p) => p.id === b.projectId))
         throw Error("Project ID already exists");
       const p: Project = {
         id: b.projectId,
@@ -101,59 +101,45 @@ export async function POST(request: Request) {
         lastChecked: null,
         version: null,
       };
-      db().exec("BEGIN IMMEDIATE");
-      try {
-        saveProject(p);
-        audit(who, p.id, b.action, p.id, "Project enrolled", "succeeded");
-        db().exec("COMMIT");
-      } catch (e) {
-        db().exec("ROLLBACK");
-        throw e;
-      }
+      await enrollProject(p, who);
       return NextResponse.json({ ok: true });
     }
-    const p = project(b.projectId);
+    const p = await project(b.projectId);
     if (b.action === "project.check") {
-      command = audit(who, p.id, b.action, p.id, "Connection check", "pending");
+      command = await audit(
+        who,
+        p.id,
+        b.action,
+        p.id,
+        "Connection check",
+        "pending",
+      );
       try {
         const m = manifest(
           await callProject(p, "/api/admin/v1/manifest"),
           p.id,
         );
-        saveProject({
+        await saveProject({
           ...p,
           ...m,
           status: "connected",
           lastChecked: new Date().toISOString(),
         });
-        finish(command, "succeeded");
+        await finish(command, "succeeded");
       } catch (e) {
-        saveProject({
+        await saveProject({
           ...p,
           status: "unreachable",
           lastChecked: new Date().toISOString(),
         });
-        finish(command, "failed");
+        await finish(command, "failed");
         command = undefined;
         throw e;
       }
       return NextResponse.json({ ok: true });
     }
     if (b.action === "project.disconnect") {
-      db().exec("BEGIN IMMEDIATE");
-      try {
-        saveProject({
-          ...p,
-          status: "disconnected",
-          capabilities: [],
-          version: null,
-        });
-        audit(who, p.id, b.action, p.id, "Connection disabled", "succeeded");
-        db().exec("COMMIT");
-      } catch (e) {
-        db().exec("ROLLBACK");
-        throw e;
-      }
+      await disconnectProject(p, who);
       return NextResponse.json({ ok: true });
     }
     if (
@@ -174,7 +160,7 @@ export async function POST(request: Request) {
       throw Error(
         "Select a target and provide a reason of at least 10 characters",
       );
-    command = claimAction(who, p.id, b.action, b.target, b.reason.trim());
+    command = await claimAction(who, p.id, b.action, b.target, b.reason.trim());
     const result = (await callProject(
       p,
       "/api/admin/v1/actions",
@@ -192,10 +178,10 @@ export async function POST(request: Request) {
       !["succeeded", "accepted", "rejected"].includes(result.status || "")
     )
       throw Error("Unconfirmed project result");
-    finish(command, result.status!);
+    await finish(command, result.status!);
     return NextResponse.json({ ok: true, status: result.status });
   } catch (e) {
-    if (command) finish(command, "unknown");
+    if (command) await finish(command, "unknown");
     return NextResponse.json(
       {
         error:

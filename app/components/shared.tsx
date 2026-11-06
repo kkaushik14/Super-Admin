@@ -13,7 +13,7 @@ export function Stat({
   icon: React.ReactNode;
   label: string;
   value: number;
-  note: string;
+  note?: string;
   green?: boolean;
 }) {
   return (
@@ -23,10 +23,12 @@ export function Stat({
         <span>{icon}</span>
       </div>
       <strong>{value.toString().padStart(2, "0")}</strong>
-      <small>
-        {green && <i />}
-        {note}
-      </small>
+      {note && (
+        <small>
+          {green && <i />}
+          {note}
+        </small>
+      )}
     </section>
   );
 }

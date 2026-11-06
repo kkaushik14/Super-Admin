@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import packageInfo from "@/package.json";
+import { signOut } from "next-auth/react";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
@@ -217,12 +219,14 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
           Super Admin
           <span className="brand-dot" />
         </Link>
-        <div className="workspace-label">WORKSPACE</div>
+
         <button
           className="workspace-switch"
           onClick={() => navigate("Projects")}
         >
-          <span className="workspace-avatar">K</span>
+          <span className="workspace-avatar">
+            {data.actor.charAt(0).toUpperCase()}
+          </span>
           <span>
             <b>My workspace</b>
             <small>
@@ -232,7 +236,7 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
           </span>
           <ChevronDown size={16} />
         </button>
-        <div className="nav-caption">MANAGE</div>
+
         <nav>
           {sections.slice(0, 6).map(([s, Icon]) => (
             <button
@@ -248,7 +252,7 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
             </button>
           ))}
         </nav>
-        <div className="nav-caption">WORKSPACE</div>
+
         <nav>
           {sections.slice(6).map(([s, Icon]) => (
             <button
@@ -266,11 +270,10 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
             <ShieldCheck size={18} />
             <div>
               <b>Private by design</b>
-              <small>Scoped access. Recorded actions.</small>
             </div>
           </div>
           <div className="profile">
-            <span className="avatar">K</span>
+            <span className="avatar">{data.actor.charAt(0).toUpperCase()}</span>
             <div>
               <b>
                 {data.preview ? "Local workspace" : data.actor.split("@")[0]}
@@ -284,7 +287,7 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
               aria-label={data.preview ? "Sign in" : "Sign out"}
               onClick={async () => {
                 if (!data.preview)
-                  await fetch("/api/session", { method: "DELETE" });
+                  await signOut({ callbackUrl: "/login", redirect: false });
                 location.href = "/login";
               }}
             >
@@ -317,13 +320,14 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
               <LockKeyhole size={12} />
               Private workspace
             </span>
-            <span className="avatar small">K</span>
+            <span className="avatar small">
+              {data.actor.charAt(0).toUpperCase()}
+            </span>
           </div>
         </header>
         <main className="content">
           <div className="page-heading">
             <div>
-              <span className="eyebrow">PROJECT CONTROL, IN ONE PLACE</span>
               <h1>{section === "Overview" ? "Workspace overview" : section}</h1>
               <p>
                 {section === "Overview"
@@ -545,9 +549,9 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
           )}
           <footer className="footer">
             <span>
-              <ShieldCheck size={13} /> Super Admin · Private workspace
+              <ShieldCheck size={13} /> Super Admin · v{packageInfo.version}
             </span>
-            <span>Every project. Under control.</span>
+            <span></span>
           </footer>
         </main>
       </div>
@@ -579,7 +583,7 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
             >
               <X size={20} />
             </button>
-            <span className="eyebrow">EXPAND YOUR WORKSPACE</span>
+
             <h2 id="add-title">Add a project</h2>
             <p>
               Each project gets an independent, explicitly authorized

@@ -4,7 +4,7 @@ This repository contains the control application only. No ReeloGram code or infr
 
 ## Enrollment
 
-Add a project slug (2–40 lowercase letters, digits and hyphens), display name, HTTPS origin and environment. Configure its exact hostname in ADMIN_ALLOWED_PROJECT_HOSTS and an independent 32+ character random secret in ADMIN_PROJECT_<SLUG_UPPERCASE_WITH_UNDERSCORES>_SECRET. Provision the same secret on the project. Secrets never enter browser forms or the database. Use separate project IDs and secrets for staging and production.
+Add a project slug (2–40 lowercase letters, digits and hyphens), display name, HTTPS origin and environment. Configure its exact hostname in SUPERADMIN_ALLOWED_PROJECT_HOSTS and an independent 32+ character random secret in SUPERADMIN_PROJECT_<SLUG_UPPERCASE_WITH_UNDERSCORES>_SECRET. Provision the same secret on the project. Secrets never enter browser forms or the database. Use separate project IDs and secrets for staging and production.
 
 The connector resolves IPv4 addresses, rejects private addresses, pins the validated address for the actual TLS request, verifies TLS normally, refuses redirects, times out after eight seconds and limits responses to 256 KiB. URLs are administratively allowlisted, not arbitrary user destinations.
 

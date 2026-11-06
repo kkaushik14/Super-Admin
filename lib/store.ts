@@ -1,92 +1,144 @@
 import { randomUUID } from "node:crypto";
-import type { Project, Audit } from "./types.ts";
-import { db } from "./db.ts";
-export { db } from "./db.ts";
-export function projects(): Project[] {
-  return (
-    db().prepare("SELECT payload FROM projects ORDER BY id").all() as {
-      payload: string;
-    }[]
-  ).map((r) => JSON.parse(r.payload));
+import type { ClientSession } from "mongoose";
+import { connectToDatabase } from "./db.ts";
+import ProjectModel, { type Project } from "../models/Project.ts";
+import AuditModel from "../models/Audit.ts";
+import type { Audit } from "../models/Audit.ts";
+import { digest } from "./auth/policy.ts";
+export { rateLimit } from "./security/rate-limit.ts";
+export async function projects(): Promise<Project[]> {
+  await connectToDatabase();
+  return ProjectModel.find({}, { _id: 0 }).sort({ id: 1 }).lean();
 }
-export function project(id: string) {
-  const p = projects().find((p) => p.id === id);
+export async function project(id: string) {
+  await connectToDatabase();
+  const p = await ProjectModel.findOne({ id }, { _id: 0 }).lean();
   if (!p) throw Error("Project not found");
   return p;
 }
-export function saveProject(p: Project) {
-  db()
-    .prepare(
-      "INSERT INTO projects VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",
-    )
-    .run(p.id, JSON.stringify(p));
+export async function saveProject(p: Project, session?: ClientSession) {
+  await connectToDatabase();
+  await ProjectModel.updateOne(
+    { id: p.id },
+    { $set: p },
+    { session, runValidators: true },
+  );
 }
-export function audit(
+export async function audit(
   actor: string,
   projectId: string,
   action: string,
   target: string,
   reason: string,
   status: string,
-  id = randomUUID(),
+  id: string = randomUUID(),
+  session?: ClientSession,
 ) {
-  db()
-    .prepare("INSERT INTO audit VALUES(?,?,?,?,?,?,?,?)")
-    .run(
-      id,
-      new Date().toISOString(),
-      actor,
-      projectId,
-      action,
-      target,
-      reason,
-      status,
-    );
+  await connectToDatabase();
+  await AuditModel.create(
+    [
+      {
+        id,
+        at: new Date().toISOString(),
+        actor,
+        projectId,
+        action,
+        target,
+        reason,
+        status,
+      },
+    ],
+    { session },
+  );
   return id;
 }
-export function finish(id: string, status: string) {
-  db().prepare("UPDATE audit SET status=? WHERE id=?").run(status, id);
+export async function finish(id: string, status: string) {
+  await connectToDatabase();
+  await AuditModel.updateOne(
+    { id },
+    {
+      $set: { status },
+      ...(["pending", "accepted", "unknown"].includes(status)
+        ? {}
+        : { $unset: { activeKey: 1 } }),
+    },
+  );
 }
-export function history(): Audit[] {
-  return db()
-    .prepare("SELECT * FROM audit ORDER BY at DESC LIMIT 200")
-    .all() as Audit[];
+export async function history(): Promise<Audit[]> {
+  await connectToDatabase();
+  return AuditModel.find({}, { _id: 0, activeKey: 0 })
+    .sort({ at: -1 })
+    .limit(200)
+    .lean();
 }
-export function rateLimit(key: string, maximum = 8) {
-  const now = Date.now();
-  db().prepare("DELETE FROM attempts WHERE expires < ?").run(now);
-  const r = db()
-    .prepare(
-      "INSERT INTO attempts VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count",
-    )
-    .get(key, now + 15 * 60_000) as { count: number };
-  if (r.count > maximum)
-    throw Error("Too many attempts. Try again in 15 minutes.");
-}
-
-export function claimAction(
+export async function claimAction(
   actor: string,
   projectId: string,
   action: string,
   target: string,
   reason: string,
 ) {
-  db().exec("BEGIN IMMEDIATE");
+  await connectToDatabase();
+  const id = randomUUID();
   try {
-    const unresolved = db()
-      .prepare(
-        "SELECT id FROM audit WHERE projectId=? AND action=? AND target=? AND status IN ('pending','accepted','unknown') LIMIT 1",
-      )
-      .get(projectId, action, target);
-    if (unresolved)
-      throw Error(
-        "An unresolved action exists for this target. Reconcile it with the project before submitting again.",
-      );
-    const id = audit(actor, projectId, action, target, reason, "pending");
-    db().exec("COMMIT");
+    await AuditModel.create({
+      id,
+      at: new Date().toISOString(),
+      actor,
+      projectId,
+      action,
+      target,
+      reason,
+      status: "pending",
+      activeKey: digest(JSON.stringify([projectId, action, target])),
+    });
     return id;
-  } catch (error) {
-    db().exec("ROLLBACK");
-    throw error;
+  } catch (e) {
+    if ((e as { code?: number }).code === 11000)
+      throw Error(
+        "An unresolved action exists for this target. Reconcile it before submitting again.",
+      );
+    throw Error("Unable to record action");
   }
+}
+export async function enrollProject(p: Project, actor: string) {
+  const conn = await connectToDatabase();
+  try {
+    await conn.transaction(async (session) => {
+      await ProjectModel.create([p], { session });
+      await audit(
+        actor,
+        p.id,
+        "project.add",
+        p.id,
+        "Project enrolled",
+        "succeeded",
+        undefined,
+        session,
+      );
+    });
+  } catch (e) {
+    if ((e as { code?: number }).code === 11000)
+      throw Error("Project ID already exists");
+    throw Error("Project enrollment could not be saved");
+  }
+}
+export async function disconnectProject(p: Project, actor: string) {
+  const conn = await connectToDatabase();
+  await conn.transaction(async (session) => {
+    await saveProject(
+      { ...p, status: "disconnected", capabilities: [], version: null },
+      session,
+    );
+    await audit(
+      actor,
+      p.id,
+      "project.disconnect",
+      p.id,
+      "Connection disabled",
+      "succeeded",
+      undefined,
+      session,
+    );
+  });
 }

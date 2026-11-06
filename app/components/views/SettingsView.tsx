@@ -8,10 +8,7 @@ export default function SettingsView({ data }: { data: Snapshot }) {
       <section className="panel settings-card">
         <ShieldCheck size={24} />
         <h2>Administrator access</h2>
-        <p>
-          Separate credentials and authenticator verification protect this
-          workspace.
-        </p>
+        <p>Production access uses your authorized Google account.</p>
         <div className="detail">
           <span>Current access</span>
           <b>{data.preview ? "Read-only preview" : "Authenticated owner"}</b>
@@ -33,15 +30,15 @@ export default function SettingsView({ data }: { data: Snapshot }) {
         </p>
         <div className="detail">
           <span>Storage</span>
-          <b>Private SQLite database</b>
+          <b>Dedicated MongoDB database</b>
         </div>
         <div className="detail">
           <span>Project isolation</span>
           <b>Independent credentials</b>
         </div>
         <p className="fine">
-          Deploy to a Node.js host with persistent storage. Configure the public
-          origin before enabling production access.
+          Ready for Vercel with independent database credentials. Configure the
+          public origin before enabling production access.
         </p>
       </section>
     </div>
