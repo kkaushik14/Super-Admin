@@ -18,6 +18,7 @@ import {
   manifest,
   resourceList,
   validateOrigin,
+  validateProjectConnection,
 } from "@/lib/connector";
 import { capabilities, type Capability, type Project } from "@/lib/types";
 export const runtime = "nodejs";
@@ -86,7 +87,7 @@ export async function POST(request: Request) {
         !b.name.trim() ||
         b.name.length > 80 ||
         typeof b.origin !== "string" ||
-        !["production", "staging"].includes(b.environment)
+        !["production", "staging", "local"].includes(b.environment)
       )
         throw Error("Check project details");
       if ((await projects()).some((p) => p.id === b.projectId))
@@ -101,6 +102,7 @@ export async function POST(request: Request) {
         lastChecked: null,
         version: null,
       };
+      validateProjectConnection(p);
       await enrollProject(p, who);
       return NextResponse.json({ ok: true });
     }
@@ -119,6 +121,8 @@ export async function POST(request: Request) {
           await callProject(p, "/api/admin/v1/manifest"),
           p.id,
         );
+        if (p.environment === "local")
+          m.capabilities = m.capabilities.filter((c) => c.endsWith(".read"));
         await saveProject({
           ...p,
           ...m,
@@ -143,6 +147,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
     if (
+      p.environment === "local" ||
       !capabilities.includes(b.action) ||
       b.action.endsWith(".read") ||
       p.status !== "connected" ||

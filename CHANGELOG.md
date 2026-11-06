@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add a development-only, exact-loopback, read-only project connection with separate local credentials and environment.
+- Add reproducible local ReeloGram connection checks and credential handoff documentation.
+
 ## 1.0.0 — 2026-11-06
 
 First versioned release of the independent Super Admin application.

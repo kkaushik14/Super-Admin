@@ -630,6 +630,7 @@ export default function Dashboard({ initial }: { initial: Snapshot }) {
                 <select name="environment">
                   <option value="production">Production</option>
                   <option value="staging">Staging</option>
+                  <option value="local">Local</option>
                 </select>
               </label>
               {data.preview && (

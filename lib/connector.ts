@@ -1,10 +1,43 @@
 import { lookup } from "node:dns/promises";
 import { request as httpsRequest } from "node:https";
-import { createHmac, randomUUID } from "node:crypto";
+import { request as httpRequest } from "node:http";
+import { appOrigin, type Environment } from "./config/environment.ts";
+import { randomUUID } from "node:crypto";
+import { signedReadHeaders } from "./integrations/admin-signature.ts";
 import { isIP } from "node:net";
 import { capabilities, type Project, type Resource } from "./types.ts";
+export function localProjectOrigin(env: Environment = process.env) {
+  try {
+    const u = new URL(env.SUPERADMIN_LOCAL_PROJECT_ORIGIN || "");
+    if (
+      env.NODE_ENV === "development" &&
+      !env.VERCEL &&
+      !env.VERCEL_ENV &&
+      ["localhost", "127.0.0.1"].includes(new URL(appOrigin(env)).hostname) &&
+      u.protocol === "http:" &&
+      ["localhost", "127.0.0.1"].includes(u.hostname) &&
+      !!u.port &&
+      !u.username &&
+      !u.password &&
+      u.pathname === "/" &&
+      !u.search &&
+      !u.hash
+    )
+      return u.origin;
+  } catch {}
+  return null;
+}
 export function validateOrigin(raw: string) {
   const u = new URL(raw);
+  if (
+    u.origin === localProjectOrigin() &&
+    !u.username &&
+    !u.password &&
+    u.pathname === "/" &&
+    !u.search &&
+    !u.hash
+  )
+    return u.origin;
   const allowed = (process.env.SUPERADMIN_ALLOWED_PROJECT_HOSTS || "")
     .split(",")
     .map((s) => s.trim());
@@ -22,6 +55,21 @@ export function validateOrigin(raw: string) {
     throw Error("Use an explicitly allowed HTTPS project host");
   return u.origin;
 }
+export function validateProjectConnection(
+  p: Pick<Project, "id" | "origin" | "environment">,
+) {
+  const origin = validateOrigin(p.origin);
+  const local = origin === localProjectOrigin();
+  if (
+    local
+      ? p.environment !== "local" || !p.id.endsWith("-local")
+      : p.environment === "local"
+  )
+    throw Error(
+      "Local connections require a local environment and a separate -local project ID",
+    );
+  return { origin, local };
+}
 export function privateAddress(ip: string) {
   return (
     ip.includes(":") ||
@@ -30,66 +78,55 @@ export function privateAddress(ip: string) {
     )
   );
 }
-export function signature(
-  secret: string,
-  method: string,
-  path: string,
-  time: string,
-  nonce: string,
-  body: string,
-) {
-  return createHmac("sha256", secret)
-    .update([method, path, time, nonce, body].join("\n"))
-    .digest("hex");
-}
 export async function callProject(
   p: Project,
   path: string,
   body?: unknown,
-  id: string = randomUUID(),
+  _id: string = randomUUID(),
 ): Promise<unknown> {
-  const origin = validateOrigin(p.origin);
-  const addresses = await lookup(new URL(origin).hostname, {
-    all: true,
-    family: 4,
-  });
-  if (!addresses.length || addresses.some((a) => privateAddress(a.address)))
+  void _id;
+  const { origin, local } = validateProjectConnection(p);
+  if (
+    body !== undefined ||
+    !/^\/api\/admin\/v1\/(manifest|accounts|videos|jobs)$/.test(path)
+  )
+    throw Error("Project connections only support read-only resources");
+  const addresses = local
+    ? [{ address: "127.0.0.1" }]
+    : await lookup(new URL(origin).hostname, {
+        all: true,
+        family: 4,
+      });
+  if (
+    !addresses.length ||
+    (!local && addresses.some((a) => privateAddress(a.address)))
+  )
     throw Error("Project host must resolve to a public address");
-  const secret =
-    process.env[
-      "SUPERADMIN_PROJECT_" +
-        p.id.toUpperCase().replaceAll("-", "_") +
-        "_SECRET"
-    ];
-  if (!secret || secret.length < 32)
-    throw Error("Project credential is not configured");
-  const method = body === undefined ? "GET" : "POST",
-    payload = body === undefined ? "" : JSON.stringify(body),
-    time = String(Math.floor(Date.now() / 1000)),
-    nonce = randomUUID();
+  const prefix =
+    "SUPERADMIN_PROJECT_" + p.id.toUpperCase().replaceAll("-", "_");
+  const secret = process.env[prefix + "_SECRET"] || "";
+  const keyId = process.env[prefix + "_KEY_ID"] || "";
+  if (secret === process.env.SUPERADMIN_AUTH_SECRET)
+    throw Error("Use an independent project credential");
+  const headers = signedReadHeaders(
+    {
+      projectId: p.id,
+      environment: p.environment,
+      audience: origin,
+      keyId,
+    },
+    path,
+    secret,
+  );
   return await new Promise((resolve, reject) => {
     const address = addresses[0].address;
-    const req = httpsRequest(
+    const req = (local ? httpRequest : httpsRequest)(
       origin + path,
       {
-        method,
+        method: "GET",
         family: 4,
         lookup: (_host, _options, callback) => callback(null, address, 4),
-        headers: {
-          "Content-Type": "application/json",
-          "X-Admin-Project": p.id,
-          "X-Admin-Time": time,
-          "X-Admin-Nonce": nonce,
-          "X-Admin-Signature": signature(
-            secret,
-            method,
-            path,
-            time,
-            nonce,
-            payload,
-          ),
-          "Idempotency-Key": id,
-        },
+        headers,
       },
       (res) => {
         if (res.statusCode !== 200) {
@@ -124,7 +161,7 @@ export async function callProject(
     );
     req.on("close", () => clearTimeout(timeout));
     req.on("error", reject);
-    req.end(payload || undefined);
+    req.end();
   });
 }
 export function manifest(value: unknown, id: string) {

@@ -3,7 +3,7 @@ export type Project = {
   id: string;
   name: string;
   origin: string;
-  environment: "production" | "staging";
+  environment: "production" | "staging" | "local";
   status: "not-connected" | "connected" | "unreachable" | "disconnected";
   capabilities: Capability[];
   lastChecked: string | null;
@@ -18,7 +18,7 @@ const schema = new Schema<Project>(
     origin: { type: String, required: true },
     environment: {
       type: String,
-      enum: ["production", "staging"],
+      enum: ["production", "staging", "local"],
       required: true,
     },
     status: {

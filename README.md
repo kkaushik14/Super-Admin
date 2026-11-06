@@ -74,3 +74,5 @@ Integration tests use disposable MongoDB replica sets. HTTP tests cover a produc
 Version 1.0.0 is the first release. Package metadata, CHANGELOG.md and the annotated `v1.0.0` Git tag identify it. Use patch versions for compatible fixes, minor versions for compatible features and major versions for incompatible changes. The project integration API has an independent version (`1`).
 
 Repository: https://github.com/kkaushik14/Super-Admin
+
+Local ReeloGram read-only connection and credential handoff: [Local connection](docs/LOCAL_CONNECTION.md). With both development servers running, use `npm run test:local` to verify the actual local integration.

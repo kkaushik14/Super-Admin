@@ -9,10 +9,13 @@ import { googleIdentity, safeRedirect } from "../lib/auth/policy.ts";
 import {
   validateOrigin,
   privateAddress,
-  signature,
   manifest,
   resourceList,
 } from "../lib/connector.ts";
+import {
+  signedReadHeaders,
+  type ReadIdentity,
+} from "../lib/integrations/admin-signature.ts";
 import { readBody } from "../lib/request.ts";
 const dev = {
   NODE_ENV: "development",
@@ -133,26 +136,38 @@ test("project enrollment rejects internal and unapproved destinations", () => {
     assert(privateAddress(ip));
   assert(!privateAddress("8.8.8.8"));
 });
-test("connection signatures bind all request fields", () => {
-  const args = [
-    "secret",
-    "POST",
-    "/api/admin/v1/actions",
-    "100",
-    "nonce",
-    "{}",
-  ] as const;
-  const good = signature(...args);
-  for (let i = 1; i < args.length; i++) {
-    const altered = [...args] as string[];
-    altered[i] += "x";
-    assert.notEqual(
-      good,
-      signature(
-        ...(altered as [string, string, string, string, string, string]),
-      ),
-    );
-  }
+test("read signatures bind project, environment, audience, key and path", () => {
+  const identity: ReadIdentity = {
+    projectId: "reelogram",
+    environment: "production" as const,
+    audience: "https://www.reelogram.in",
+    keyId: "key-one",
+  };
+  const sign = (
+    i = identity,
+    path = "/api/admin/v1/accounts",
+    time = "1793920000",
+    nonce = "nonce",
+  ) =>
+    signedReadHeaders(i, path, "a".repeat(64), time, nonce)[
+      "X-Admin-Signature"
+    ];
+  const good = sign();
+  for (const patch of [
+    { projectId: "other" },
+    { environment: "staging" as const },
+    { audience: "https://other.example" },
+    { keyId: "key-two" },
+  ])
+    assert.notEqual(sign({ ...identity, ...patch }), good);
+  assert.notEqual(sign(identity, "/api/admin/v1/videos"), good);
+  assert.notEqual(sign(identity, "/api/admin/v1/accounts", "1793920001"), good);
+  assert.notEqual(
+    sign(identity, "/api/admin/v1/accounts", "1793920000", "other"),
+    good,
+  );
+  for (const path of ["/api/admin/v1/actions", "/api/admin/v1/accounts?x=1"])
+    assert.throws(() => sign(identity, path));
 });
 test("manifest and resource validation reject privilege expansion", () => {
   assert.deepEqual(
@@ -191,4 +206,74 @@ test("request streaming enforces a bound", async () => {
     ),
     "{}",
   );
+});
+
+test("local connector is exact-origin, development-only and read-only", async () => {
+  const { localProjectOrigin, validateProjectConnection, callProject } =
+    await import("../lib/connector.ts");
+  const env = {
+    NODE_ENV: "development",
+    SUPERADMIN_APP_URL: "http://localhost:3100",
+    SUPERADMIN_LOCAL_PROJECT_ORIGIN: "http://localhost:3000",
+  };
+  assert.equal(localProjectOrigin(env), "http://localhost:3000");
+  for (const overrides of [
+    { NODE_ENV: "production" },
+    { NODE_ENV: "test" },
+    { VERCEL: "1" },
+    { VERCEL_ENV: "preview" },
+    { SUPERADMIN_APP_URL: "https://admin.example.com" },
+    { SUPERADMIN_LOCAL_PROJECT_ORIGIN: "http://169.254.169.254:3000" },
+    { SUPERADMIN_LOCAL_PROJECT_ORIGIN: "http://localhost:3000/path" },
+  ])
+    assert.equal(localProjectOrigin({ ...env, ...overrides }), null);
+  const previous = { ...process.env };
+  try {
+    Object.assign(process.env, env);
+    delete process.env.VERCEL;
+    delete process.env.VERCEL_ENV;
+    const p = {
+      id: "reelogram-local",
+      name: "Local",
+      environment: "local" as const,
+      origin: env.SUPERADMIN_LOCAL_PROJECT_ORIGIN,
+      status: "connected" as const,
+      capabilities: [],
+      lastChecked: null,
+      version: "1",
+    };
+    assert.equal(validateOrigin(p.origin), p.origin);
+    for (const origin of [
+      "http://localhost:3001",
+      "http://127.0.0.1:3000",
+      "http://localhost:3000/path",
+      "http://user@localhost:3000",
+      "http://localhost:3000?x=1",
+    ])
+      assert.throws(() => validateOrigin(origin));
+    assert.throws(() =>
+      validateProjectConnection({ ...p, environment: "production" }),
+    );
+    assert.throws(() => validateProjectConnection({ ...p, id: "reelogram" }));
+    assert.throws(() =>
+      validateProjectConnection({ ...p, origin: "https://www.reelogram.in" }),
+    );
+    await assert.rejects(
+      () => callProject(p, "/api/admin/v1/actions", {}),
+      /read-only/,
+    );
+    await assert.rejects(
+      () => callProject(p, "/api/admin/v1/accounts?x=1"),
+      /read-only/,
+    );
+    Object.assign(process.env, { NODE_ENV: "production" });
+    await assert.rejects(
+      () => callProject(p, "/api/admin/v1/manifest"),
+      /HTTPS/,
+    );
+  } finally {
+    for (const key of Object.keys(process.env))
+      if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+  }
 });
